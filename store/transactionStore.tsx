@@ -12,16 +12,26 @@ export interface Transaction {
   note?: string;
 }
 
+interface UploadingData {
+  title: string;
+  amount: string;
+  imageUri?: string | null;
+}
+
 interface TransactionContextType {
   transactions: Transaction[];
   loading: boolean;
-  addTransaction: (formData: FormData) => Promise<boolean>; // Dùng FormData cho upload ảnh
+  isUploading: boolean;
+  uploadingData: UploadingData | null; // Dữ liệu đang tải lên để hiện preview
+  addTransaction: (formData: FormData, previewData?: UploadingData) => Promise<boolean>;
   refreshTransactions: () => Promise<void>;
 }
 
 const TransactionContext = createContext<TransactionContextType>({
   transactions: [],
   loading: false,
+  isUploading: false,
+  uploadingData: null,
   addTransaction: async () => false,
   refreshTransactions: async () => {},
 });
@@ -29,6 +39,8 @@ const TransactionContext = createContext<TransactionContextType>({
 export function TransactionProvider({ children, isAuthenticated }: { children: ReactNode; isAuthenticated: boolean }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadingData, setUploadingData] = useState<UploadingData | null>(null);
 
   const fetchTransactions = useCallback(async () => {
     if (!isAuthenticated) {
@@ -50,21 +62,32 @@ export function TransactionProvider({ children, isAuthenticated }: { children: R
     fetchTransactions();
   }, [fetchTransactions]);
 
-  const addTransaction = async (formData: FormData) => {
+  const addTransaction = async (formData: FormData, previewData?: UploadingData) => {
+    setIsUploading(true);
+    if (previewData) setUploadingData(previewData);
+    
     try {
-      await apiClient.post('/expenses', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      await fetchTransactions(); // Refresh
+      await apiClient.post('/expenses', formData);
+      await fetchTransactions(); // Refresh danh sách thực
       return true;
     } catch (error) {
       console.error('Lỗi khi lưu chi tiêu:', error);
       return false;
+    } finally {
+      setIsUploading(false);
+      setUploadingData(null);
     }
   };
 
   return (
-    <TransactionContext.Provider value={{ transactions, loading, addTransaction, refreshTransactions: fetchTransactions }}>
+    <TransactionContext.Provider value={{ 
+      transactions, 
+      loading, 
+      isUploading, 
+      uploadingData,
+      addTransaction, 
+      refreshTransactions: fetchTransactions 
+    }}>
       {children}
     </TransactionContext.Provider>
   );

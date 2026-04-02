@@ -18,7 +18,8 @@ import {
   Search,
   History,
   Heart,
-  MessageSquare
+  MessageSquare,
+  Bell
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,6 +31,7 @@ import { formatCurrency } from '@/utils/format';
 import { useAuth } from '../_layout';
 import { useTransactions } from '@/store/transactionStore';
 import type { Transaction } from '@/store/transactionStore';
+import { Skeleton } from '@/components/common/Skeleton';
 
 const { width } = Dimensions.get('window');
 
@@ -38,18 +40,32 @@ const { width } = Dimensions.get('window');
  * Chú trọng hình ảnh (chụp hóa đơn, món ăn, đồ mua) và ghi chú nhanh.
  */
 
-// Dữ liệu feed được quản lý qua TransactionStore, không còn dùng hardcode nữa
+const FeedSkeleton = () => (
+  <View style={{ flex: 1, backgroundColor: Colors.white, padding: 20 }}>
+    <Skeleton height={140} borderRadius={25} style={{ marginBottom: 20 }} />
+    <Skeleton width="60%" height={24} style={{ marginBottom: 15 }} />
+    <View style={{ gap: 12 }}>
+      {[1, 2, 3].map(i => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 15, borderRadius: 20 }}>
+          <Skeleton width={50} height={50} borderRadius={12} />
+          <View style={{ marginLeft: 15, flex: 1 }}>
+            <Skeleton width="40%" height={18} style={{ marginBottom: 8 }} />
+            <Skeleton width="25%" height={12} />
+          </View>
+          <Skeleton width={60} height={24} />
+        </View>
+      ))}
+    </View>
+  </View>
+);
 
 export default function LocketDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { transactions, loading, refreshTransactions } = useTransactions();
+  const { transactions, loading, isUploading, uploadingData, refreshTransactions } = useTransactions();
   
   const [refreshing, setRefreshing] = React.useState(false);
-
-  // Tính toán tổng thu chi thực tế động
-  const totalBalance = transactions.reduce((acc, curr) => acc + curr.amount, 0);
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -57,15 +73,29 @@ export default function LocketDashboard() {
     setRefreshing(false);
   }, [refreshTransactions]);
 
-  const renderSpendingCard = ({ item }: { item: Transaction }) => (
+  if (loading && transactions.length === 0) {
+    return (
+       <SafeAreaView style={{ flex: 1, backgroundColor: Colors.white }}>
+          <View style={styles.header}>
+            <AppText variant="h1" weight="heavy">Kết nối</AppText>
+          </View>
+          <FeedSkeleton />
+       </SafeAreaView>
+    );
+  }
+
+  // Tính toán tổng thu chi thực tế động
+  const totalBalance = transactions.reduce((acc, curr) => acc + curr.amount, 0);
+
+  const renderSpendingCard = ({ item }: { item: any }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <AppAvatar 
-          uri={user?.avatar || "https://i.pravatar.cc/150?u=admin"} 
+          uri={item.userAvatar || "https://ui-avatars.com/api/?name=" + encodeURIComponent(item.userName)} 
           size={32} 
         />
         <View style={styles.cardHeaderText}>
-           <AppText weight="bold" variant="subtext">{user?.name || 'Admin'}</AppText>
+           <AppText weight="bold" variant="subtext">{item.userName}</AppText>
            <AppText variant="tiny" color={Colors.text.secondary}>{item.date}</AppText>
         </View>
         <View style={styles.categoryBadge}>
@@ -114,18 +144,22 @@ export default function LocketDashboard() {
       {/* Locket Style Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 10)}]}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.iconButton}>
-            <History size={24} color={Colors.black} />
-          </TouchableOpacity>
+          <AppText variant="h1" weight="heavy" style={styles.logoText}>Kết nối</AppText>
         </View>
         
-        <View style={styles.headerCenter}>
-          <AppText variant="h1" weight="heavy" style={styles.logoText}>CHI TIÊU</AppText>
-        </View>
+        <View style={styles.headerCenter} />
 
         <View style={styles.headerRight}>
           <TouchableOpacity 
             style={styles.iconButton}
+            onPress={() => router.push('/notifications')}
+          >
+            <Bell size={24} color={Colors.black} />
+            <View style={styles.badge} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.iconButton, { marginLeft: 10 }]}
             onPress={() => router.push('/messages')}
           >
             <MessageCircle size={24} color={Colors.black} />
@@ -141,27 +175,56 @@ export default function LocketDashboard() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <View style={styles.balanceSummary}>
-            <View style={styles.balanceInfo}>
-              <AppText variant="tiny" color={Colors.text.muted} weight="bold">TỔNG THU CHI</AppText>
-              <AppText variant="h2" weight="bold" color={totalBalance < 0 ? Colors.error : Colors.online}>
-                {formatCurrency(totalBalance)}
-              </AppText>
+          <View>
+            {isUploading && uploadingData && (
+              <View style={styles.ghostCard}>
+                 <View style={styles.ghostHeader}>
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <AppText variant="caption" weight="bold" style={{ marginLeft: 10, color: Colors.primary }}>
+                       Đang đăng bài viết của bạn...
+                    </AppText>
+                 </View>
+                 
+                 <View style={styles.ghostContent}>
+                    {uploadingData.imageUri && (
+                       <Image source={{ uri: uploadingData.imageUri }} style={styles.ghostThumb} />
+                    )}
+                    <View style={styles.ghostInfo}>
+                       <AppText weight="bold" variant="subtext" numberOfLines={1}>{uploadingData.title}</AppText>
+                       <AppText variant="caption" color={Colors.text.secondary}>
+                          {formatCurrency(parseFloat(uploadingData.amount || '0'))}
+                       </AppText>
+                    </View>
+                 </View>
+
+                 {/* Thanh Progress Bar ngang kiểu FB */}
+                 <View style={styles.ghostProgressBg}>
+                    <View style={styles.ghostProgressBar} />
+                 </View>
+              </View>
+            )}
+
+            <View style={styles.balanceSummary}>
+              <View style={styles.balanceInfo}>
+                <AppText variant="tiny" color={Colors.text.muted} weight="bold">Tổng thu chi của bạn</AppText>
+                <AppText variant="h2" weight="bold" color={totalBalance < 0 ? Colors.error : Colors.online}>
+                  {formatCurrency(totalBalance)}
+                </AppText>
+              </View>
             </View>
-            <TouchableOpacity style={styles.searchFab}>
-               <Search size={20} color={Colors.text.secondary} />
-            </TouchableOpacity>
           </View>
         }
         ListEmptyComponent={
           loading ? (
-            <View style={{ alignItems: 'center', paddingTop: 60 }}>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <AppText color={Colors.text.muted} style={{ marginTop: 16 }}>Đang tải dữ liệu...</AppText>
+            <View style={{ padding: 20 }}>
+              <Skeleton height={120} borderRadius={20} style={{ marginBottom: 15 }} />
+              <Skeleton height={120} borderRadius={20} />
             </View>
           ) : (
-            <View style={{ alignItems: 'center', paddingTop: 60 }}>
-              <AppText variant="h2" style={{ fontSize: 48 }}>📭</AppText>
+            <View style={{ alignItems: 'center', paddingTop: 100 }}>
+              <View style={styles.emptyIconCircle}>
+                 <Plus size={40} color={Colors.text.muted} />
+              </View>
               <AppText weight="bold" color={Colors.text.secondary} style={{ marginTop: 12 }}>Chưa có chi tiêu nào</AppText>
               <AppText color={Colors.text.muted} style={{ marginTop: 6, textAlign: 'center' }}>Bấm nút + bên dưới để ghi{"\n"}lại khoản chi đầu tiên!</AppText>
             </View>
@@ -189,19 +252,72 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   headerLeft: {
-    width: 44,
+    width: 120,
   },
   headerCenter: {
     flex: 1,
-    alignItems: 'center',
   },
   headerRight: {
-    width: 44,
-    alignItems: 'flex-end',
+    width: 100,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   logoText: {
-    letterSpacing: 2,
-    fontSize: 20,
+    fontSize: 22,
+    textAlign: 'left',
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  ghostCard: {
+    backgroundColor: Colors.white,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    ...Shadows.light,
+    opacity: 0.8,
+  },
+  ghostHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  ghostContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  ghostThumb: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+  },
+  ghostInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  ghostProgressBg: {
+    height: 4,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  ghostProgressBar: {
+    height: '100%',
+    width: '70%', // Mô phỏng đang chạy
+    backgroundColor: Colors.primary,
+    borderRadius: 2,
   },
   iconButton: {
     width: 40,

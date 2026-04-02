@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Animated,
+  Alert,
 } from 'react-native';
 import { X, Camera as CameraIcon, Image as ImageIcon, RefreshCw, Check, Zap } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -51,6 +52,7 @@ export default function AddExpenseScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [flash, setFlash] = useState<'off' | 'on' | 'auto'>('off');
 
   useEffect(() => {
     apiClient.get('/categories').then(res => {
@@ -58,6 +60,14 @@ export default function AddExpenseScreen() {
         if (res.data.length > 0) setSelectedCategoryId(res.data[0].id);
     });
   }, []);
+
+  const toggleFlash = () => {
+    setFlash(prev => {
+      if (prev === 'off') return 'on';
+      if (prev === 'on') return 'auto';
+      return 'off';
+    });
+  };
 
   const handlePickGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -93,7 +103,7 @@ export default function AddExpenseScreen() {
     if (cameraRef.current) {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
-        base64: false
+        base64: false,
       });
       if (photo) {
         setImageUri(photo.uri);
@@ -110,37 +120,53 @@ export default function AddExpenseScreen() {
       return;
     }
 
-    setIsSaving(true);
-    progressAnim.setValue(0);
-    Animated.timing(progressAnim, { toValue: 0.8, duration: 1500, useNativeDriver: false }).start();
-
-    const formData = new FormData();
-    formData.append('amount', rawAmount.toString());
-    formData.append('note', note);
-    formData.append('category_id', selectedCategoryId?.toString() || '');
-    formData.append('title', note || 'Chi tiêu mới');
-
-    if (imageUri) {
-      const ext = imageUri.split('.').pop() || 'jpg';
-      const fileName = `expense_${Date.now()}.${ext}`;
-      formData.append('photo', {
-        uri: imageUri,
-        name: fileName,
-        type: `image/${ext}`
-      } as any);
-    }
-
-    const success = await addTransaction(formData);
-    
-    if (success) {
-        Animated.timing(progressAnim, { toValue: 1, duration: 300, useNativeDriver: false }).start(() => {
-            router.replace('/(tabs)');
-        });
+    // CHỐNG LỖI "FORM DATA (0)": Nếu không có ảnh, dùng Object thường để gửi JSON (An toàn nhất trên Web)
+    if (!imageUri) {
+      const jsonPayload = {
+        amount: rawAmount,
+        note: note || '',
+        category_id: selectedCategoryId || 1,
+        title: note || 'Chi tiêu mới'
+      };
+      
+      addTransaction(jsonPayload as any, {
+        title: note || 'Chi tiêu mới',
+        amount: rawAmount.toString(),
+        imageUri: null
+      });
     } else {
-        setIsSaving(false);
-        setModalContent({ title: 'Thất bại', message: 'Có lỗi xảy ra khi lưu chi tiêu. Vui lòng thử lại.' });
-        setModalVisible(true);
+      // Nếu có ảnh, bắt buộc dùng FormData (Multipart)
+      const formData = new FormData();
+      formData.append('amount', rawAmount.toString());
+      formData.append('note', note);
+      formData.append('category_id', selectedCategoryId?.toString() || '1');
+      formData.append('title', note || 'Chi tiêu mới');
+
+      const fileName = `expense_${Date.now()}.jpg`;
+      if (Platform.OS === 'web') {
+        try {
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          formData.append('photo', blob, fileName);
+        } catch (e) {
+          console.error('Lỗi khi chuyển đổi ảnh trên Web:', e);
+        }
+      } else {
+        formData.append('photo', {
+          uri: imageUri,
+          name: fileName,
+          type: 'image/jpeg'
+        } as any);
+      }
+
+      addTransaction(formData, {
+        title: note || 'Chi tiêu mới',
+        amount: rawAmount.toString(),
+        imageUri: imageUri
+      });
     }
+    
+    router.replace('/(tabs)');
   };
 
   const handleAmountChange = (text: string) => {
@@ -199,7 +225,6 @@ export default function AddExpenseScreen() {
               <View style={styles.amountInputContainer}>
                 <AppText variant="tiny" weight="heavy" color={Colors.text.muted}>SỐ TIỀN</AppText>
                 <View style={styles.amountWrap}>
-                  <AppText variant="h1" weight="heavy">₫</AppText>
                   <TextInput
                     style={styles.amountInput}
                     placeholder="0"
@@ -208,6 +233,7 @@ export default function AddExpenseScreen() {
                     value={amount}
                     onChangeText={handleAmountChange}
                   />
+                  <AppText variant="h1" weight="heavy" style={{ marginLeft: 10 }}>₫</AppText>
                 </View>
               </View>
 
@@ -260,33 +286,52 @@ export default function AddExpenseScreen() {
 
   return (
     <View style={styles.cameraContainer}>
-       <CameraView ref={cameraRef} style={styles.camera} facing="back">
-          <SafeAreaView style={styles.cameraOverlay}>
-             <View style={styles.cameraHeader}>
-                <TouchableOpacity onPress={() => router.back()}>
-                   <X size={30} color={Colors.white} />
-                </TouchableOpacity>
-                <AppText weight="heavy" color={Colors.white} style={{ fontSize: 18 }}>LOCKET CHI TIÊU</AppText>
-                <View style={{ width: 30 }} />
-             </View>
+       <SafeAreaView style={styles.cameraSafeArea}>
+          {/* Header */}
+          <View style={styles.cameraHeader}>
+             <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+                <X size={26} color={Colors.white} />
+             </TouchableOpacity>
+             <AppText weight="heavy" color={Colors.white} style={styles.headerTitle}>LOCKET CHI TIÊU</AppText>
+             <TouchableOpacity style={styles.flashBtn} onPress={toggleFlash}>
+                <Zap 
+                  size={24} 
+                  color={flash === 'off' ? Colors.white : '#FFD700'} 
+                  fill={flash === 'on' ? '#FFD700' : 'transparent'} 
+                />
+             </TouchableOpacity>
+          </View>
 
-             <View style={styles.cameraEmpty} />
-             
-             <View style={styles.cameraFooter}>
-                <TouchableOpacity style={styles.subAction} onPress={handlePickGallery}>
-                   <ImageIcon size={28} color={Colors.white} />
-                </TouchableOpacity>
+          {/* Square Camera Preview */}
+          <View style={styles.cameraWrapper}>
+             <CameraView 
+                ref={cameraRef} 
+                style={styles.camera} 
+                facing="back" 
+                enableTorch={flash === 'on'}
+                flash={flash}
+            />
+          </View>
+          
+          {/* Footer Controls */}
+          <View style={styles.cameraFooter}>
+             <TouchableOpacity style={styles.subAction} onPress={handlePickGallery}>
+                <ImageIcon size={26} color={Colors.white} />
+             </TouchableOpacity>
 
-                <TouchableOpacity style={styles.captureBtn} onPress={handleTakePhoto}>
-                   <View style={styles.captureInner} />
-                </TouchableOpacity>
+             <TouchableOpacity style={styles.captureBtn} onPress={handleTakePhoto}>
+                <View style={styles.captureInner} />
+             </TouchableOpacity>
 
-                <TouchableOpacity style={styles.subAction} onPress={() => {}}>
-                   <RefreshCw size={28} color={Colors.white} />
-                </TouchableOpacity>
-             </View>
-          </SafeAreaView>
-       </CameraView>
+             <TouchableOpacity style={styles.subAction} onPress={() => {}}>
+                <RefreshCw size={26} color={Colors.white} />
+             </TouchableOpacity>
+          </View>
+
+          <View style={styles.cameraTip}>
+             <AppText color="rgba(255,255,255,0.4)" variant="tiny">CHỤP CẬN CẢNH HÓA ĐƠN HOẶC MÓN ĂN</AppText>
+          </View>
+       </SafeAreaView>
     </View>
   );
 
@@ -304,52 +349,82 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.black,
   },
-  camera: {
-    flex: 1,
-  },
-  cameraOverlay: {
+  cameraSafeArea: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingBottom: 40,
+    paddingVertical: 10,
   },
   cameraHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginTop: 10,
+    height: 60,
   },
-  cameraEmpty: {
-    flex: 1,
+  closeBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 16,
+    letterSpacing: 1.2,
+  },
+  flashBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraWrapper: {
+    width: width,
+    height: width,
+    overflow: 'hidden',
+    borderRadius: 40,
+    backgroundColor: '#1A1A1A',
+  },
+  camera: {
+    width: '100%',
+    height: '100%',
   },
   cameraFooter: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: 30,
+    height: 120,
   },
   captureBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 5,
     borderColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
   captureInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: Colors.white,
   },
   subAction: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  cameraTip: {
+    alignItems: 'center',
+    marginBottom: 20,
   },
   infoForm: {
     flex: 1,
@@ -374,14 +449,14 @@ const styles = StyleSheet.create({
   amountWrap: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     marginTop: 10,
   },
   amountInput: {
     fontSize: 40,
     fontWeight: '900',
     color: Colors.black,
-    marginLeft: 10,
-    flex: 1,
+    textAlign: 'right',
   },
   imagePreviewContainer: {
     width: '100%',

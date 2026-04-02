@@ -1,7 +1,8 @@
 import { useEffect, useState, createContext, useContext, useCallback } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, Text } from 'react-native';
+import { View, ActivityIndicator, Text, Image } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TransactionProvider } from '@/store/transactionStore';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -124,31 +125,61 @@ export default function RootLayout() {
 
   if (isInitializing || (!fontsLoaded && !fontError)) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#7C3AED', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
-        <Text style={{ marginTop: 24, color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>ĐANG KHỞI TẠO...</Text>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ 
+          width: 120, 
+          height: 120, 
+          borderRadius: 35, 
+          backgroundColor: '#FFFFFF', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          marginBottom: 40,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.08,
+          shadowRadius: 20,
+          elevation: 5
+        }}>
+           <Image 
+             source={require('../assets/icon.png')} 
+             style={{ width: 80, height: 80, borderRadius: 20 }} 
+             resizeMode="contain"
+           />
+        </View>
+        <ActivityIndicator size="small" color="#7C3AED" />
+        <Text style={{ 
+          marginTop: 24, 
+          color: '#94A3B8', 
+          fontSize: 14, 
+          fontWeight: '500',
+          letterSpacing: 0.5
+        }}>
+          Đang khởi tạo ứng dụng...
+        </Text>
       </View>
     );
   }
 
   return (
-    <AuthContext.Provider value={{
-      isAuthenticated: !!user,
-      user,
-      login: loginHandler,
-      logout: logoutHandler
-    }}>
-      <TransactionProvider isAuthenticated={!!user}>
-        <View style={{ flex: 1 }}>
-          <StatusBar style="auto" />
-          <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="messages" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="add-expense" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
-            <Stack.Screen name="chat/[id]" options={{ presentation: 'card' }} />
-          </Stack>
-        </View>
-      </TransactionProvider>
-    </AuthContext.Provider>
+    <SafeAreaProvider>
+      <AuthContext.Provider value={{
+        isAuthenticated: !!user,
+        user,
+        login: loginHandler,
+        logout: logoutHandler
+      }}>
+        <TransactionProvider isAuthenticated={!!user}>
+          <View style={{ flex: 1 }}>
+            <StatusBar style="dark" translucent />
+            <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="messages" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="add-expense" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+              <Stack.Screen name="chat/[id]" options={{ presentation: 'card' }} />
+            </Stack>
+          </View>
+        </TransactionProvider>
+      </AuthContext.Provider>
+    </SafeAreaProvider>
   );
 }

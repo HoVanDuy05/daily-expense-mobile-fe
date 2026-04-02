@@ -1,45 +1,72 @@
-import { useState, useRef, useMemo } from 'react';
-import { FlatList } from 'react-native';
-import { ChatMessage } from '@/types/Chat';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import apiClient from '@/services/api';
 
-/**
- * Hook xử lý logic cho màn hình Chat chi tiết.
- * Quản lý trạng thái tin nhắn và tự động cuộn.
- */
-export const useChat = () => {
-  const [message, setMessage] = useState('');
-  const flatListRef = useRef<FlatList>(null);
+export interface ChatMessage {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  content: string;
+  read_at: string | null;
+  created_at: string;
+}
 
-  const INITIAL_MESSAGES: ChatMessage[] = useMemo(() => [
-    { id: '1', text: 'Chào Linh, dự án chạy ổn không?', sender: 'me', time: '14:15' },
-    { id: '2', text: 'Ổn lắm anh ơi, khách hàng vừa feedback ok hết rồi!', sender: 'them', time: '14:16' },
-  ], []);
+export function useChat(friendId: number) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const fetchMessages = useCallback(async () => {
+    try {
+      const response = await apiClient.get<ChatMessage[]>(`/messages/chat/${friendId}`);
+      setMessages(response.data);
+    } catch (error) {
+      console.error('Lỗi khi tải tin nhắn:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [friendId]);
 
-  const sendMessage = () => {
-    if (!message.trim()) return;
+  useEffect(() => {
+    if (!friendId) return;
     
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      text: message,
-      sender: 'me',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    fetchMessages();
+    
+    // Tự động cập nhật tin nhắn mỗi 5 giây (Polling cơ bản)
+    timerRef.current = setInterval(fetchMessages, 5000);
+    
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
     };
+  }, [fetchMessages, friendId]);
 
-    setMessages(prev => [...prev, newMessage]);
-    setMessage('');
+  const sendMessage = async (content: string) => {
+    if (!content.trim()) return;
     
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    try {
+      setSending(true);
+      const response = await apiClient.post('/messages', {
+        receiver_id: friendId,
+        content: content.trim()
+      });
+      
+      // Thêm ngay tin nhắn mới vào danh sách locally để mượt mà
+      setMessages(prev => [...prev, response.data]);
+      return true;
+    } catch (error) {
+      console.error('Gửi tin nhắn thất bại:', error);
+      return false;
+    } finally {
+      setSending(false);
+    }
   };
 
   return {
-    message,
-    setMessage,
     messages,
+    loading,
+    sending,
     sendMessage,
-    flatListRef,
+    refreshMessages: fetchMessages
   };
-};
+}

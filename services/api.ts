@@ -4,14 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const apiClient = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api',
-  timeout: 45000, // Tăng timeout cho Render bản miễn phí (thường load lâu)
+  timeout: 60000, // Tăng lên 60 giây để Render (bản free) có đủ thời gian khởi động
   headers: {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
 });
 
-// REQUEST: Gắn Token
+// REQUEST: Gắn Token bảo mật
 apiClient.interceptors.request.use(async (config) => {
   const token = await AsyncStorage.getItem('user_token'); 
   if (token) {
@@ -20,26 +19,40 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
-// RESPONSE: XỬ LÝ LỖI GLOBAL
+// RESPONSE: XỬ LÝ LỖI TOÀN CỤC (Notification System)
 apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const { response } = error;
-    const errorMessage = response?.data?.message || 'Có lỗi hệ thống xảy ra. Vui lòng thử lại sau!';
-
-    if (response) {
-      if (response.status === 401) {
-        await AsyncStorage.removeItem('user_token');
-        Alert.alert('Phiên hết hạn', 'Vui lòng đăng nhập lại để đảm bảo an toàn.');
-      } else if (response.status === 422) {
-        // Validation - backend đã chuẩn tiếng Việt
-        Alert.alert('Dữ liệu chưa đúng', errorMessage);
-      } else if (response.status === 500) {
-        Alert.alert('Lỗi Server', errorMessage);
-      }
-    } else {
-      Alert.alert('Lỗi mạng', 'Không thể kết nối tới máy chủ. Hãy kiểm tra kết nối mạng của bạn!');
+  (response) => {
+    // Nếu API trả về thành công nhưng có kèm message thông báo (Ví dụ: "Đã lưu xong")
+    if (response.data && response.data.message && response.status === 201) {
+       // Bạn có thể tùy chọn hiện Alert ở đây nếu muốn
     }
+    return response;
+  },
+  async (error) => {
+    let message = 'Đã có lỗi xảy ra. Vui lòng thử lại sau!';
+
+    if (error.response) {
+      // 1. Phân tích lỗi từ Backend gửi về
+      const data = error.response.data;
+      const status = error.response.status;
+
+      if (data && data.message) {
+        message = data.message;
+      } else if (status === 401) {
+        message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!';
+        await AsyncStorage.removeItem('user_token');
+      } else if (status === 422) {
+        message = 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại thông tin!';
+      } else if (status === 500) {
+        message = 'Server đang bận xử lý. Vui lòng thử lại sau giây lát!';
+      }
+    } else if (error.request) {
+      // 2. Lỗi không kết nối được tới máy chủ (Render đang khởi động chẳng hạn)
+      message = 'Không thể kết nối tới máy chủ. Hãy đảm bảo mạng của bạn ổn định!';
+    }
+
+    // 🏆 THÔNG BÁO LỖI (Log để debug trong giai đoạn này)
+    console.error('API Error:', message);
 
     return Promise.reject(error);
   }

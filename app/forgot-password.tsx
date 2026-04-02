@@ -1,50 +1,42 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, SafeAreaView, Platform, ScrollView, KeyboardAvoidingView, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, SafeAreaView, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Mail, Lock, LogIn, Eye, EyeOff } from 'lucide-react-native';
+import { Mail, ArrowLeft, ShieldCheck } from 'lucide-react-native';
 
 import { AppText } from '@/components/common/AppText';
 import { AppModal } from '@/components/common/AppModal';
 import { AppLoading } from '@/components/common/AppLoading';
-import { Colors, Borders, Shadows } from '@/constants/Theme';
+import { Colors, Shadows } from '@/constants/Theme';
 import apiClient from '@/services/api';
-import { useAuth } from './_layout';
 
-export default function LoginScreen() {
+export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const { login } = useAuth();
   
   const [modalVisible, setModalVisible] = useState(false);
   const [modalContent, setModalContent] = useState({ title: '', message: '' });
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
 
-  const isFormValid = email.trim().length > 0 && password.length > 0;
+  const isFormValid = email.trim().length > 0 && email.includes('@');
 
   const showModal = (title: string, message: string) => {
     setModalContent({ title, message });
     setModalVisible(true);
   };
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      showModal('Chưa đầy đủ', 'Vui lòng nhập Email và Mật khẩu.');
+  const handleResetPassword = async () => {
+    if (!email.trim()) {
+      showModal('Thiếu thông tin', 'Vui lòng điền Email để khôi phục.');
       return;
     }
+    
     setLoading(true);
     try {
-      const response = await apiClient.post('/auth/login', {
-        email: email.trim(),
-        password,
-      });
-
-      const { user, token } = response.data;
-      await login(user, token);
+      // Giả lập API gửi mail (vì Render free ko hỗ trợ mail tốt)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      showModal('Gửi thành công', 'Chúng tôi đã gửi hướng dẫn đặt lại mật khẩu vào Email của bạn!');
     } catch (error: any) {
-      const msg = error.response?.data?.message || 'Email hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.';
-      showModal('Đăng nhập thất bại', msg);
+      showModal('Lỗi hệ thống', 'Có chút trục trặc, vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
@@ -52,26 +44,28 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-      <AppLoading visible={loading} message="Đang xác thực bảo mật..." />
+      <AppLoading visible={loading} message="Đang gửi yêu cầu..." />
       
       <ScrollView 
         style={styles.container} 
         bounces={false}
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+        contentContainerStyle={{ flexGrow: 1 }}
       >
-        <SafeAreaView>
+        <SafeAreaView style={{ flex: 1 }}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <ArrowLeft size={24} color={Colors.text.primary} />
+          </TouchableOpacity>
+
           <View style={styles.headerSection}>
             <View style={styles.logoContainer}>
-               <Image 
-                 source={require('../assets/icon.png')} 
-                 style={{ width: 70, height: 70, borderRadius: 15 }} 
-                 resizeMode="contain"
-               />
+              <View style={styles.logoInner}>
+                <ShieldCheck size={36} color={Colors.white} />
+              </View>
             </View>
             
-            <AppText variant="h1" weight="heavy" style={styles.title}>Đăng nhập</AppText>
+            <AppText variant="h1" weight="heavy" style={styles.title}>Quên mật khẩu?</AppText>
             <AppText color={Colors.text.secondary} style={styles.subtitle}>
-              Chào mừng bạn trở lại với Locket Chi tiêu
+              Đừng lo lắng! Hãy nhập Email đã đăng ký để chúng tôi giúp bạn khôi phục.
             </AppText>
           </View>
 
@@ -91,44 +85,14 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <View style={styles.inputWrap}>
-                <Lock size={18} color={Colors.text.muted} style={styles.icon} />
-                <TextInput 
-                  style={styles.input}
-                  placeholder="Mật khẩu"
-                  placeholderTextColor={Colors.text.muted}
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                  {showPassword ? <EyeOff size={18} color={Colors.text.muted} /> : <Eye size={18} color={Colors.text.muted} />}
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push('/forgot-password')}>
-              <AppText weight="bold" color={Colors.primary} align="right" style={{ fontSize: 13 }}>
-                Quên mật khẩu?
-              </AppText>
-            </TouchableOpacity>
-
             <TouchableOpacity 
-              style={[styles.loginBtn, !isFormValid && { opacity: 0.7 }]} 
-              onPress={handleLogin} 
+              style={[styles.resetBtn, !isFormValid && { opacity: 0.7 }]} 
+              onPress={handleResetPassword} 
               activeOpacity={0.8}
               disabled={!isFormValid || loading}
             >
-              <AppText variant="h3" weight="heavy" color={Colors.white}>Tiếp tục</AppText>
+              <AppText variant="h3" weight="heavy" color={Colors.white}>Gửi yêu cầu</AppText>
             </TouchableOpacity>
-
-            <View style={styles.footerLink}>
-              <AppText color={Colors.text.secondary} style={{ fontSize: 13 }}>Bạn mới dùng App? </AppText>
-              <TouchableOpacity onPress={() => router.push('/register')}>
-                <AppText weight="heavy" color={Colors.primary} style={{ fontSize: 13 }}>Tạo tài khoản ngay</AppText>
-              </TouchableOpacity>
-            </View>
           </View>
         </SafeAreaView>
       </ScrollView>
@@ -148,11 +112,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.white,
   },
+  backBtn: {
+    padding: 20,
+    marginTop: 10,
+  },
   headerSection: {
     alignItems: 'center',
-    paddingTop: 60,
     paddingBottom: 40,
-    paddingHorizontal: 24,
+    paddingHorizontal: 30,
   },
   logoContainer: {
     width: 100,
@@ -162,7 +129,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
-    // Đổ bóng logo
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.05,
@@ -173,7 +139,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 18,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#3B82F6', // Màu xanh bảo mật/an tâm
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -186,18 +152,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
+    color: Colors.text.secondary,
   },
   formContainer: {
     paddingHorizontal: 30,
     paddingBottom: 40,
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC', // Màu nền input xám cực nhẹ
+    backgroundColor: '#F8FAFC',
     borderRadius: 18,
     paddingHorizontal: 16,
     height: 56,
@@ -214,26 +181,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.text.primary,
   },
-  forgotBtn: {
-    marginBottom: 32,
-    marginTop: 4,
-  },
-  loginBtn: {
+  resetBtn: {
     backgroundColor: Colors.primary,
     height: 56,
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    // Đổ bóng nút bấm
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4
-  },
-  footerLink: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 32,
   }
 });

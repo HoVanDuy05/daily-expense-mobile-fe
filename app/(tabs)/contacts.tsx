@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -10,14 +10,15 @@ import {
   RefreshControl,
   Image
 } from 'react-native';
-import { UserPlus, Search, UserCheck, Clock, Check, X, Bell } from 'lucide-react-native';
+import { UserPlus, Search, UserCheck, Clock, Check, X, Bell, Users } from 'lucide-react-native';
 import apiClient from '@/services/api';
 
 import { Colors, Spacing, Shadows, Borders } from '@/constants/Theme';
 import { AppText } from '@/components/common/AppText';
 import { AppAvatar } from '@/components/common/AppAvatar';
+import { AppModal } from '@/components/common/AppModal';
 
-type TabType = 'friends' | 'find' | 'requests' | 'notifications';
+type TabType = 'friends' | 'find' | 'requests';
 
 export default function SocialScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('friends');
@@ -29,7 +30,16 @@ export default function SocialScreen() {
   const [requests, setRequests] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
 
-  const fetchSocialData = async () => {
+  // Modal State
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+
+  const showModal = (title: string, message: string) => {
+    setModalContent({ title, message });
+    setModalVisible(true);
+  };
+
+  const fetchSocialData = useCallback(async () => {
     try {
       const [friendsRes, notiRes] = await Promise.all([
         apiClient.get('/friends'),
@@ -44,22 +54,35 @@ export default function SocialScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSocialData();
-  }, []);
+  }, [fetchSocialData]);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchSocialData();
   };
 
+  // Logic Debounce Tìm kiếm
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(() => {
+      handleSearch();
+    }, 500); // Đợi 500ms sau khi ngừng gõ
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
   const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
     setLoading(true);
     try {
-      const res = await apiClient.get(`/friends/search?q=${searchQuery}`);
+      const res = await apiClient.get(`/users/search?q=${searchQuery.trim()}`);
       setSearchResults(res.data);
     } catch (error) {
       console.error('Lỗi tìm kiếm:', error);
@@ -71,34 +94,49 @@ export default function SocialScreen() {
   const sendFriendRequest = async (userId: number) => {
     try {
       await apiClient.post('/friends/request', { receiver_id: userId });
-      alert('Đã gửi lời mời kết bạn!');
-      // Update local state if needed
+      showModal('Thành công', 'Đã gửi lời mời kết bạn mới !');
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Lỗi khi gửi lời mời.');
+      showModal('Thất bại', error.response?.data?.message || 'Có lỗi khi gửi lời mời.');
     }
   };
 
   const respondToRequest = async (senderId: number, action: 'accept' | 'decline') => {
     try {
-      await apiClient.post('/friends/respond', { sender_id: senderId, action });
-      fetchSocialData(); // Refresh list
+      await apiClient.post('/friends/accept/' + senderId); // Theo API backend mới
+      fetchSocialData();
     } catch (error) {
        console.error('Lỗi phản hồi lời mời:', error);
     }
   };
 
-  const markNotiRead = async (id: string) => {
-    try {
-      await apiClient.post(`/notifications/${id}/read`);
-      fetchSocialData();
-    } catch {}
-  };
+  const unreadCount = notifications.filter(n => !n.read_at).length;
+
+  const EmptyState = ({ icon: Icon, title, sub }: any) => (
+    <View style={styles.emptyWrap}>
+       <View style={styles.emptyIconCircle}>
+          <Icon size={40} color={Colors.text.muted} />
+       </View>
+       <AppText weight="bold" style={styles.emptyTitle}>{title}</AppText>
+       <AppText variant="caption" color={Colors.text.muted} align="center">{sub}</AppText>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header cải tiến với Thông báo */}
       <View style={styles.header}>
-        <AppText variant="h1" weight="heavy">Mạng xã hội</AppText>
-        <AppText variant="caption" color={Colors.text.secondary}>Kết nối cộng đồng chi tiêu</AppText>
+        <View>
+          <AppText variant="h1" weight="heavy">Mạng xã hội</AppText>
+          <AppText variant="caption" color={Colors.text.secondary}>Kết nối cộng đồng chi tiêu</AppText>
+        </View>
+        <TouchableOpacity style={styles.headerNotiBtn}>
+           <Bell size={24} color={Colors.black} />
+           {unreadCount > 0 && (
+             <View style={styles.headerBadge}>
+                <AppText weight="bold" style={{ fontSize: 10, color: Colors.white }}>{unreadCount}</AppText>
+             </View>
+           )}
+        </TouchableOpacity>
       </View>
 
       <View style={styles.tabContainer}>
@@ -111,7 +149,7 @@ export default function SocialScreen() {
         />
         <TabItem 
           active={activeTab === 'find'} 
-          label="Tìm kiếm" 
+          label="Tìm bạn" 
           icon={Search} 
           onPress={() => setActiveTab('find')} 
         />
@@ -120,14 +158,9 @@ export default function SocialScreen() {
           label="Lời mời" 
           icon={Clock} 
           count={requests.length}
-          onPress={() => setActiveTab('requests')} 
-        />
-        <TabItem 
-          active={activeTab === 'notifications'} 
-          label="Thông báo" 
-          icon={Bell} 
-          count={notifications.filter(n => !n.read_at).length}
-          onPress={() => setActiveTab('notifications')} 
+          onPress={() => {
+            setActiveTab('requests');
+          }} 
         />
       </View>
 
@@ -145,21 +178,39 @@ export default function SocialScreen() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 onSubmitEditing={handleSearch}
+                returnKeyType="search"
               />
             </View>
+            
             <View style={styles.resultsList}>
-              {searchResults.map(user => (
-                <View key={user.id} style={styles.userCard}>
-                   <AppAvatar uri={user.settings?.avatar} size={50} />
-                   <View style={styles.userInfo}>
-                      <AppText weight="bold">{user.name}</AppText>
-                      <AppText variant="tiny" color={Colors.text.muted}>{user.email}</AppText>
-                   </View>
-                   <TouchableOpacity style={styles.addBtn} onPress={() => sendFriendRequest(user.id)}>
-                      <UserPlus size={18} color={Colors.white} />
-                   </TouchableOpacity>
-                </View>
-              ))}
+              {loading ? (
+                <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />
+              ) : searchResults.length > 0 ? (
+                searchResults.map(user => (
+                  <View key={user.id} style={styles.userCard}>
+                    <AppAvatar uri={user.avatar} size={50} />
+                    <View style={styles.userInfo}>
+                        <AppText weight="bold">{user.name}</AppText>
+                        <AppText variant="tiny" color={Colors.text.muted}>{user.email}</AppText>
+                    </View>
+                    <TouchableOpacity style={styles.addBtn} onPress={() => sendFriendRequest(user.id)}>
+                        <UserPlus size={18} color={Colors.white} />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : searchQuery ? (
+                <EmptyState 
+                  icon={Search} 
+                  title="Không tìm thấy ai" 
+                  sub="Hãy thử nhập chính xác tên hoặc email của bạn bè." 
+                />
+              ) : (
+                <EmptyState 
+                  icon={Users} 
+                  title="Tìm kiếm bạn bè" 
+                  sub="Nhập tên hoặc email người bạn muốn kết nối." 
+                />
+              )}
             </View>
           </View>
         )}
@@ -168,7 +219,7 @@ export default function SocialScreen() {
            <View style={styles.listSection}>
              {friends.length > 0 ? friends.map(friend => (
                <View key={friend.id} style={styles.userCard}>
-                 <AppAvatar uri={friend.settings?.avatar} size={50} />
+                 <AppAvatar uri={friend.avatar} size={50} />
                  <View style={styles.userInfo}>
                     <AppText weight="bold">{friend.name}</AppText>
                     <AppText variant="tiny" color={Colors.text.muted}>Đang theo dõi chi tiêu</AppText>
@@ -178,9 +229,11 @@ export default function SocialScreen() {
                  </TouchableOpacity>
                </View>
              )) : (
-               <View style={styles.emptyWrap}>
-                  <AppText color={Colors.text.muted}>Chưa có bạn bè nào. Hãy thử tìm kiếm!</AppText>
-               </View>
+                <EmptyState 
+                  icon={Users} 
+                  title="Chưa có bạn bè" 
+                  sub="Hãy đi tìm những người đồng hành cùng bạn ngay thôi!" 
+                />
              )}
            </View>
         )}
@@ -189,7 +242,7 @@ export default function SocialScreen() {
            <View style={styles.listSection}>
              {requests.length > 0 ? requests.map(req => (
                <View key={req.id} style={styles.userCard}>
-                 <AppAvatar uri={req.settings?.avatar} size={50} />
+                 <AppAvatar uri={req.avatar} size={50} />
                  <View style={styles.userInfo}>
                     <AppText weight="bold">{req.name}</AppText>
                     <AppText variant="tiny" color={Colors.text.muted}>Muốn kết bạn với bạn</AppText>
@@ -204,30 +257,21 @@ export default function SocialScreen() {
                  </View>
                </View>
              )) : (
-               <View style={styles.emptyWrap}>
-                  <AppText color={Colors.text.muted}>Không có lời mời nào đang chờ.</AppText>
-               </View>
+                <EmptyState 
+                  icon={Clock} 
+                  title="Không có lời mời" 
+                  sub="Tạm thời chưa có lời mời kết bạn nào mới." 
+                />
              )}
            </View>
         )}
-
-        {activeTab === 'notifications' && (
-           <View style={styles.listSection}>
-             {notifications.map(noti => (
-               <TouchableOpacity 
-                 key={noti.id} 
-                 style={[styles.notiItem, !noti.read_at && styles.notiUnread]}
-                 onPress={() => markNotiRead(noti.id)}
-               >
-                 <View style={styles.notiContent}>
-                    <AppText weight={noti.read_at ? "semibold" : "bold"}>{noti.data.title}</AppText>
-                    <AppText variant="caption" color={Colors.text.secondary}>{noti.data.message}</AppText>
-                 </View>
-               </TouchableOpacity>
-             ))}
-           </View>
-        )}
       </ScrollView>
+      <AppModal 
+        visible={modalVisible}
+        title={modalContent.title}
+        message={modalContent.message}
+        onClose={() => setModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -257,9 +301,33 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 20,
+  },
+  headerNotiBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: Colors.error,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.white,
   },
   tabContainer: {
     flexDirection: 'row',
@@ -315,10 +383,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   resultsList: {
-    marginTop: 20,
+    marginTop: 10,
   },
   listSection: {
-    padding: 10,
+    padding: 15,
   },
   userCard: {
     flexDirection: 'row',
@@ -368,18 +436,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyWrap: {
-    padding: 50,
+    marginTop: 60,
+    paddingHorizontal: 40,
     alignItems: 'center',
   },
-  notiItem: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface,
+  emptyIconCircle: {
+     width: 80,
+     height: 80,
+     borderRadius: 40,
+     backgroundColor: Colors.surface,
+     justifyContent: 'center',
+     alignItems: 'center',
+     marginBottom: 20,
   },
-  notiUnread: {
-    backgroundColor: 'rgba(124, 58, 237, 0.05)',
-  },
-  notiContent: {
-    flex: 1,
+  emptyTitle: {
+     fontSize: 18,
+     marginBottom: 8,
+     color: Colors.text.primary,
   }
 });

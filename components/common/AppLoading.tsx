@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Modal, Dimensions } from 'react-native';
+import { View, StyleSheet, Animated, Modal, Easing } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Database, DollarSign } from 'lucide-react-native';
-import { Colors } from '@/constants/Theme';
+import { Wallet } from 'lucide-react-native';
+import { Colors, Borders } from '@/constants/Theme';
 import { AppText } from './AppText';
 
 interface AppLoadingProps {
@@ -10,94 +10,64 @@ interface AppLoadingProps {
   message?: string;
 }
 
-/**
- * MONEY FOUNTAIN COMPONENT
- * Hiệu ứng "Phun Tiền" từ rương Database
- */
-const MoneyFountain = ({ delay }: { delay: number }) => {
-  const anim = useRef(new Animated.Value(0)).current;
+export const AppLoading = ({ visible, message = 'Đang xác thực bảo mật...' }: AppLoadingProps) => {
+  const rotateAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 1800,
-        delay,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, [anim, delay]);
-
-  // Tiền bay vút lên
-  const translateY = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [20, -120],
-  });
-
-  // Bay lượn trái phải ngẫu nhiên
-  const translateX = anim.interpolate({
-    inputRange: [0, 0.3, 0.6, 1],
-    outputRange: [0, delay % 20, -(delay % 30), 10],
-  });
-
-  // Hiện ra ở gốc và mờ dần khi lên cao
-  const opacity = anim.interpolate({
-    inputRange: [0, 0.2, 0.8, 1],
-    outputRange: [0, 1, 1, 0],
-  });
-
-  // To nhỏ khi bay
-  const scale = anim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.5, 1.2, 0.8],
-  });
-
-  return (
-    <Animated.View style={[styles.moneyIcon, { opacity, transform: [{ translateY }, { translateX }, { scale }] }]}>
-      <DollarSign size={20} color="#F59E0B" strokeWidth={3} />
-    </Animated.View>
-  );
-};
-
-export const AppLoading = ({ visible, message = 'Đang xử lý tài chính...' }: AppLoadingProps) => {
-  const shakeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      // Rương tiền rung động nhẹ khi phun tiền
+    // Luôn bắt đầu một vòng lặp vĩnh cửu khi Component được mount
+    const startRotation = () => {
+      rotateAnim.setValue(0);
       Animated.loop(
-        Animated.sequence([
-          Animated.timing(shakeAnim, { toValue: 2, duration: 100, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -2, duration: 100, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
-        ])
+        Animated.timing(rotateAnim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
       ).start();
+    };
+
+    if (visible) {
+      startRotation();
+    } else {
+      rotateAnim.stopAnimation();
     }
-  }, [visible, shakeAnim]);
+
+    // Đảm bảo dừng hẳn khi unmount để tránh rò rỉ bộ nhớ
+    return () => rotateAnim.stopAnimation();
+  }, [visible]);
+
+  const spin = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   return (
-    <Modal transparent visible={visible} animationType="fade">
+    <Modal transparent visible={visible} animationType="fade" statusBarTranslucent>
       <View style={styles.container}>
-        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+        <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
         
-        <View style={styles.content}>
-          <View style={styles.animationArea}>
-             {/* 5 dòng tiền phun lên liên tục */}
-             <MoneyFountain delay={0} />
-             <MoneyFountain delay={400} />
-             <MoneyFountain delay={800} />
-             <MoneyFountain delay={1200} />
-             <MoneyFountain delay={1600} />
+        <View style={styles.glassCard}>
+           <View style={styles.iconContainer}>
+              <Animated.View 
+                style={[
+                  styles.halo, 
+                  { transform: [{ rotate: spin }] }
+                ]} 
+              />
+              <View style={styles.innerIcon}>
+                 <Wallet size={26} color={Colors.primary} strokeWidth={2.5} />
+              </View>
+           </View>
 
-             {/* Rương tiền (Database Icon) */}
-             <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-                <Database size={60} color={Colors.primary} strokeWidth={2.5} />
-             </Animated.View>
-          </View>
-          
-          <AppText weight="heavy" style={styles.message}>
-            {message.toUpperCase()}
-          </AppText>
+           <View style={styles.textWrap}>
+              <AppText weight="bold" color={Colors.text.primary} style={styles.message}>
+                {message}
+              </AppText>
+              <AppText variant="caption" color={Colors.text.muted} style={styles.subtext}>
+                Vui lòng chờ trong giây lát
+              </AppText>
+           </View>
         </View>
       </View>
     </Modal>
@@ -109,29 +79,56 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.15)',
   },
-  content: {
+  glassCard: {
+    minWidth: 220,
+    maxWidth: '85%',
+    paddingHorizontal: 30,
+    paddingVertical: 24,
+    backgroundColor: 'white',
+    borderRadius: Borders.radius.xl,
     alignItems: 'center',
-    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  animationArea: {
-    width: 150,
-    height: 150,
+  iconContainer: {
+    width: 65,
+    height: 65,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  moneyIcon: {
+  halo: {
     position: 'absolute',
-    bottom: 45, // Nằm trên icon Database một chút
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 3,
+    borderColor: 'rgba(124, 58, 237, 0.1)',
+    borderTopColor: Colors.primary,
+  },
+  innerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(124, 58, 237, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textWrap: {
+    alignItems: 'center',
   },
   message: {
-    marginTop: 10,
-    fontSize: 14,
-    color: Colors.white,
-    letterSpacing: 2,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    fontSize: 15,
+    textAlign: 'center',
   },
+  subtext: {
+    marginTop: 6,
+    fontSize: 12,
+    opacity: 0.7,
+  }
 });

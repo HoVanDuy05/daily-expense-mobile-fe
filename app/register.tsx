@@ -62,84 +62,89 @@ export default function RegisterScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <AppLoading visible={loading} message="Đang khởi tạo tài khoản..." />
       
-      <ScrollView style={styles.container} bounces={false}>
-        <View style={styles.topGraphic}>
-          <SafeAreaView>
-             <View style={{ paddingHorizontal: 30, paddingTop: 40, paddingBottom: 60 }}>
-               <AppText variant="h1" color={Colors.white} weight="heavy" style={{ fontSize: 32 }}>Mở Tài khoản</AppText>
-               <AppText color="rgba(255,255,255,0.8)" style={{ marginTop: 12 }}>Đồng hành cùng nền tảng tài chính thông minh</AppText>
-             </View>
-          </SafeAreaView>
-        </View>
+      <ScrollView 
+        style={styles.container} 
+        bounces={false}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+      >
+        <SafeAreaView>
+          <View style={styles.headerSection}>
+            {/* Logo Brand */}
+            <View style={styles.logoContainer}>
+              <View style={styles.logoInner}>
+                <AppText style={{ fontSize: 32 }}>💰</AppText>
+              </View>
+            </View>
+            
+            <AppText variant="h1" weight="heavy" style={styles.title}>Tạo tài khoản</AppText>
+            <AppText color={Colors.text.secondary} style={styles.subtitle}>
+              Bắt đầu hành trình quản lý tài chính thông minh cùng Locket
+            </AppText>
+          </View>
 
-        <View style={styles.formContainer}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40}}>
+          <View style={styles.formContainer}>
             <View style={styles.inputGroup}>
-              <AppText weight="bold" color={Colors.text.secondary} style={styles.label}>Họ và tên</AppText>
               <View style={styles.inputWrap}>
-                 <User size={20} color={Colors.text.muted} style={styles.icon} />
-                 <TextInput 
-                   style={styles.input}
-                   placeholder="Tên của bạn"
-                   placeholderTextColor={Colors.text.muted}
-                   value={name}
-                   onChangeText={setName}
-                 />
+                <User size={18} color={Colors.text.muted} style={styles.icon} />
+                <TextInput 
+                  style={styles.input}
+                  placeholder="Họ và tên"
+                  placeholderTextColor={Colors.text.muted}
+                  value={name}
+                  onChangeText={setName}
+                />
               </View>
             </View>
 
             <View style={styles.inputGroup}>
-              <AppText weight="bold" color={Colors.text.secondary} style={styles.label}>Địa chỉ Email</AppText>
               <View style={styles.inputWrap}>
-                 <Mail size={20} color={Colors.text.muted} style={styles.icon} />
-                 <TextInput 
-                   style={styles.input}
-                   placeholder="your@email.com"
-                   placeholderTextColor={Colors.text.muted}
-                   value={email}
-                   onChangeText={setEmail}
-                   autoCapitalize="none"
-                   keyboardType="email-address"
-                 />
+                <Mail size={18} color={Colors.text.muted} style={styles.icon} />
+                <TextInput 
+                  style={styles.input}
+                  placeholder="Email của bạn"
+                  placeholderTextColor={Colors.text.muted}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
               </View>
             </View>
 
             <View style={styles.inputGroup}>
-              <AppText weight="bold" color={Colors.text.secondary} style={styles.label}>Mật khẩu bảo mật</AppText>
               <View style={styles.inputWrap}>
-                 <Lock size={20} color={Colors.text.muted} style={styles.icon} />
-                 <TextInput 
-                   style={styles.input}
-                   placeholder="Nhập mật khẩu khó đoán"
-                   placeholderTextColor={Colors.text.muted}
-                   secureTextEntry={!showPassword}
-                   value={password}
-                   onChangeText={setPassword}
-                 />
-                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                   {showPassword ? <EyeOff size={20} color={Colors.text.muted} /> : <Eye size={20} color={Colors.text.muted} />}
-                 </TouchableOpacity>
+                <Lock size={18} color={Colors.text.muted} style={styles.icon} />
+                <TextInput 
+                  style={styles.input}
+                  placeholder="Mật khẩu bảo mật"
+                  placeholderTextColor={Colors.text.muted}
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
+                  {showPassword ? <EyeOff size={18} color={Colors.text.muted} /> : <Eye size={18} color={Colors.text.muted} />}
+                </TouchableOpacity>
               </View>
             </View>
 
             <TouchableOpacity 
-               style={[styles.loginBtn, !isFormValid && { opacity: 0.5 }]} 
-               onPress={handleRegister} 
-               activeOpacity={0.8}
-               disabled={!isFormValid || loading}
+              style={[styles.loginBtn, !isFormValid && { opacity: 0.7 }]} 
+              onPress={handleRegister} 
+              activeOpacity={0.8}
+              disabled={!isFormValid || loading}
             >
-               <AppText variant="h2" weight="heavy" color={Colors.white} style={{fontSize: 18}}>Tạo Tài khoản mới</AppText>
-               <UserPlus size={20} color={Colors.white} style={{position: 'absolute', right: 24}} />
+              <AppText variant="h3" weight="heavy" color={Colors.white}>Tạo ngay</AppText>
             </TouchableOpacity>
 
             <View style={styles.footerLink}>
-               <AppText color={Colors.text.secondary} style={{fontSize: 14}}>Đã có tài khoản? </AppText>
-               <TouchableOpacity onPress={() => router.replace('/login')}>
-                  <AppText weight="heavy" color={Colors.primary} style={{fontSize: 14}}>Đăng nhập ngay</AppText>
-               </TouchableOpacity>
+              <AppText color={Colors.text.secondary} style={{ fontSize: 13 }}>Đã có tài khoản? </AppText>
+              <TouchableOpacity onPress={() => router.replace('/login')}>
+                <AppText weight="heavy" color={Colors.primary} style={{ fontSize: 13 }}>Đăng nhập ngay</AppText>
+              </TouchableOpacity>
             </View>
-          </ScrollView>
-        </View>
+          </View>
+        </SafeAreaView>
       </ScrollView>
 
       <AppModal 
@@ -157,59 +162,90 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.white,
   },
-  topGraphic: {
+  headerSection: {
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingBottom: 40,
+    paddingHorizontal: 24,
+  },
+  logoContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 30,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    // Đổ bóng logo
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 3
+  },
+  logoInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
     backgroundColor: Colors.primary,
-    borderBottomLeftRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 28,
+    color: Colors.text.primary,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 10,
   },
   formContainer: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    paddingHorizontal: 24,
-    paddingTop: 40,
+    paddingHorizontal: 30,
+    paddingBottom: 40,
   },
   inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    marginBottom: 8,
-    marginLeft: 4,
-    fontSize: 13,
+    marginBottom: 16,
   },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-    borderRadius: Borders.radius.lg,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 18,
     paddingHorizontal: 16,
-    height: 60,
-    ...Shadows.light,
+    height: 56,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   icon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   input: {
     flex: 1,
     height: '100%',
-    fontFamily: 'BeVietnamPro_600SemiBold',
+    fontFamily: 'BeVietnamPro_500Medium',
     fontSize: 15,
     color: Colors.text.primary,
   },
   loginBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: Colors.primary,
-    height: 60,
-    borderRadius: Borders.radius.xl,
-    marginTop: 20,
-    ...Shadows.medium,
+    height: 56,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+    // Đổ bóng nút bấm
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4
   },
   footerLink: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 30,
-    paddingBottom: 40,
+    marginTop: 32,
   }
 });
